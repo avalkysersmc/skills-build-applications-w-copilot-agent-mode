@@ -1,29 +1,31 @@
+import { useApiResource } from '../api/useApiResource.js';
+import type { Activity } from '../api/types.js';
 import { CapabilityCard } from './CapabilityCard.js';
-import { useApiData } from '../api/useApiData.js';
 
-type Activity = { type: string; minutes: number; points: number };
 type ActivitiesResponse = { activities: Activity[] };
 
 export default function Activities() {
-  const { data, loading, error } = useApiData<ActivitiesResponse>('/api/activities');
-  const activities = data?.activities ?? [];
-
+  const resource = useApiResource<ActivitiesResponse>('/api/activities');
   return (
     <CapabilityCard
       title="Activities"
       description="Track student activity minutes and points."
-      loading={loading}
-      error={error}
-      empty={!loading && !error && activities.length === 0}
-      emptyMessage="No activities yet."
+      resource={resource}
+      loadingText="Loading activities…"
+      errorText="Unable to load activities. Please try again."
+      emptyText="No activities logged yet."
+      isEmpty={(data) => data.activities.length === 0}
     >
-      <ul>
-        {activities.map((activity, index) => (
-          <li key={`${activity.type}-${index}`}>
-            {activity.type}: {activity.minutes} minutes, {activity.points} points
-          </li>
-        ))}
-      </ul>
+      {(data) => (
+        <ul className="list-unstyled mb-0">
+          {data.activities.map((activity, index) => (
+            <li key={activity._id ?? index} className="mb-2">
+              <strong>{activity.type}</strong>: {activity.minutes} minutes, {activity.points} points
+              {activity.occurredAt && <> · {new Date(activity.occurredAt).toLocaleDateString()}</>}
+            </li>
+          ))}
+        </ul>
+      )}
     </CapabilityCard>
   );
 }

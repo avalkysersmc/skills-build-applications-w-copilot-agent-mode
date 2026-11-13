@@ -15,7 +15,7 @@ OctoFit Tracker is a three-tier application for a school fitness program. The st
 - MongoDB: `27017`
 - Express API: `8000`
 - Vite frontend: `5173`
-- The browser calls relative `/api` paths. Vite proxies them to `http://localhost:8000`, so the unauthenticated API port stays private in Codespaces. `VITE_API_BASE_URL` can override the base URL.
+- The browser calls relative `/api` paths. Vite proxies them to `http://localhost:8000`, so the unauthenticated API port stays private in Codespaces. `VITE_API_BASE_URL` can override the base URL. `VITE_DEMO_USER_EMAIL` selects the user whose workout suggestions are shown (default `mona@example.com`) until user selection exists.
 
 ## API contract
 
@@ -31,16 +31,17 @@ OctoFit Tracker is a three-tier application for a school fitness program. The st
 - **Presentation tier**: Keep React components responsible for rendering and interaction, and use the shared API client for relative `/api` requests. Each capability page should expose accessible loading, error, and empty states before rendering returned data.
 - **Logic tier**: Keep HTTP handling and contract validation in the Express routes/services. Return deliberate 4xx responses for invalid or unknown input rather than leaking Mongoose cast or validation errors as 500s.
 - **Data tier**: Use Mongoose models for required fields and relationships, and keep representative, repeatable seed data in `src/scripts/seed.ts`. Persist application data in MongoDB; do not introduce a separate storage layer.
-- **Activity tracking**: Validate that `userId` and `teamId` are well-formed IDs for existing records before creating an activity. Store the referenced user and team, submitted type and minutes, computed points, and occurrence date.
-- **Team management**: Require a name, preserve the submitted name and mascot, and support the members array when creating and listing teams.
-- **Leaderboard**: Aggregate activity points by team, sort totals descending, and assign ranks starting at 1.
-- **Workout suggestions**: Match the requested email to a user, use that user's goal and recent activity to choose relevant suggestions, and include a concise reason. Return a 4xx when no user matches.
+- **Activity tracking**: Validate that `userId` and `teamId` are well-formed IDs for existing records before creating an activity. Malformed IDs return `400`; well-formed IDs for missing users or teams return `404`. The user must belong to the submitted team, or the request returns `400`. Points equal minutes (one point per minute). `occurredAt` is optional and defaults to server time.
+- **Team management**: Require a name and mascot (`400` otherwise), preserve both, and accept a members array of existing user IDs (unknown or malformed IDs return `400`). Team names are unique (duplicates return `409`). Membership is kept in sync on both the team and the user.
+- **Leaderboard**: Include every team, including teams with zero points. Sort totals descending and use competition ranking, so tied teams share a rank and the next rank skips ahead (`1, 1, 3`).
+- **Workout suggestions**: Match the requested email to a user (case-insensitive). The user's `fitnessGoal` takes priority, then the focus of their most recent activity. Each entry has a `reason`. If nothing matches, return all workouts with a general reason. Unknown emails return `404`.
+- **Error responses**: All errors use the shape `{ "error": "<message>" }`.
 - **Implementation order**: Establish model validation first, then implement and test API writes and reads, then connect the presentation pages to the API. Keep authentication out of scope.
 
 ## Test plan
 
-- Run the data contract tests after model or seed changes. A failure indicates a missing model constraint, relationship, or seed-data behavior. `npm run test:data --prefix octofit-tracker/backend` — **passes: 5 tests**.
-- Run the API contract tests after route or service changes. Failures indicate a mismatch in HTTP status codes, response shape, persistence, points/ranking, or suggestion matching. `npm run test:api --prefix octofit-tracker/backend` — **passes: 4 tests**.
-- Run the frontend contract tests after page or API-client changes. Failures indicate a missing API request, rendered content, or accessible loading/error/empty state. `npm test --prefix octofit-tracker/frontend` — **passes: 15 tests**.
+- Run the data contract tests after model or seed changes. A failure indicates a missing model constraint, relationship, or seed-data behavior. `npm run test:data --prefix octofit-tracker/backend` — passes (5 of 5), including required-field validation and seed idempotency.
+- Run the API contract tests after route or service changes. Failures indicate a mismatch in HTTP status codes, response shape, persistence, points/ranking, or suggestion matching. `npm run test:api --prefix octofit-tracker/backend` — passes (4 of 4).
+- Run the frontend contract tests after page or API-client changes. Failures indicate a missing API request, rendered content, or accessible loading/error/empty state. `npm test --prefix octofit-tracker/frontend` — passes (15 of 15), covering API-driven content and loading, error, and empty states on each page.
 - Run the backend build to catch TypeScript or backend compilation errors. `npm run build --prefix octofit-tracker/backend` — **passes**.
 - Run the frontend build to catch frontend compilation or bundling errors. `npm run build --prefix octofit-tracker/frontend` — **passes**.

@@ -1,133 +1,158 @@
 import { Activity, Team, User, Workout } from '../models/index.js';
 
-type RecordInput = Record<string, unknown>;
+const OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
 
-function isRecord(input: unknown): input is RecordInput {
-  return typeof input === 'object' && input !== null && !Array.isArray(input);
-}
+// Activity types map to the workout focus they train.
+const focusByActivityType: Record<string, string> = {
+  run: 'endurance',
+  cycle: 'endurance',
+  swim: 'endurance',
+  walk: 'mobility',
+  yoga: 'mobility',
+  strength: 'strength',
+  lift: 'strength',
+};
 
 function httpError(status: number, message: string) {
   return Object.assign(new Error(message), { status });
 }
 
-function requiredString(value: unknown, field: string) {
-  if (typeof value !== 'string' || value.trim().length === 0) {
+function isObjectId(value: unknown): value is string {
+  return typeof value === 'string' && OBJECT_ID_PATTERN.test(value);
+}
+
+function requireText(value: unknown, field: string) {
+  if (typeof value !== 'string' || value.trim() === '') {
     throw httpError(400, `${field} is required`);
   }
   return value.trim();
-}
-
-function isObjectId(value: unknown): value is string {
-  return typeof value === 'string' && /^[a-f\d]{24}$/i.test(value);
 }
 
 export async function listActivities() {
   return Activity.find().lean();
 }
 
-export async function createActivity(input: unknown) {
-  if (!isRecord(input)) throw httpError(400, 'Activity details are required');
-
-  const { userId, teamId } = input;
-  const type = requiredString(input.type, 'type');
-  const minutes = input.minutes;
-  if (!isObjectId(userId) || !isObjectId(teamId)) {
-    throw httpError(400, 'Valid userId and teamId are required');
-  }
+export async function createActivity(input: any) {
+  const { userId, teamId, type, minutes, occurredAt } = input ?? {};
+  if (!isObjectId(userId)) throw httpError(400, 'userId must be a valid ID');
+  if (!isObjectId(teamId)) throw httpError(400, 'teamId must be a valid ID');
+  const activityType = requireText(type, 'type');
   if (typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes <= 0) {
     throw httpError(400, 'minutes must be a positive number');
   }
+  let occurred = new Date();
+  if (occurredAt !== undefined) {
+    occurred = new Date(occurredAt);
+    if (Number.isNaN(occurred.getTime())) throw httpError(400, 'occurredAt must be a valid date');
+  }
 
-  const [user, team] = await Promise.all([
-    User.findById(userId).select('_id'),
-    Team.findById(teamId).select('_id'),
-  ]);
-  if (!user || !team) throw httpError(404, 'User or team not found');
+  const [user, team] = await Promise.all([User.findById(userId).lean(), Team.findById(teamId).lean()]);
+  if (!user) throw httpError(404, 'User not found');
+  if (!team) throw httpError(404, 'Team not found');
+  if (String(user.team) !== String(team._id)) throw httpError(400, 'User is not a member of that team');
 
-  return Activity.create({
+  // One point per minute, matching the seed data.
+  const activity = await Activity.create({
     user: user._id,
     team: team._id,
-    type,
+    type: activityType,
     minutes,
     points: minutes,
-    occurredAt: new Date(),
+    occurredAt: occurred,
   });
+  return activity.toObject();
 }
 
 export async function listTeams() {
   return Team.find().lean();
 }
 
-export async function createTeam(input: unknown) {
-  if (!isRecord(input)) throw httpError(400, 'Team details are required');
-
-  const name = requiredString(input.name, 'name');
-  const mascot = requiredString(input.mascot, 'mascot');
-  const memberIds = input.members ?? [];
-  if (!Array.isArray(memberIds) || memberIds.some((memberId) => !isObjectId(memberId))) {
-    throw httpError(400, 'members must be an array of valid user IDs');
+export async function createTeam(input: any) {
+  const name = requireText(input?.name, 'name');
+  const mascot = requireText(input?.mascot, 'mascot');
+  const memberIds: unknown[] = input?.members ?? [];
+  if (!Array.isArray(memberIds) || !memberIds.every(isObjectId)) {
+    throw httpError(400, 'members must be a list of valid IDs');
+  }
+  const uniqueMemberIds = [...new Set(memberIds as string[])];
+  if (uniqueMemberIds.length > 0) {
+    const found = await User.countDocuments({ _id: { $in: uniqueMemberIds } });
+    if (found !== uniqueMemberIds.length) throw httpError(400, 'members must reference existing users');
   }
 
-  const members = memberIds.length > 0
-    ? await User.find({ _id: { $in: memberIds } }).select('_id')
-    : [];
-  if (members.length !== memberIds.length) throw httpError(404, 'One or more team members were not found');
-
-  return Team.create({ name, mascot, members: members.map((member) => member._id) });
+  try {
+    const team = await Team.create({ name, mascot, members: uniqueMemberIds });
+    if (uniqueMemberIds.length > 0) {
+      // Keep both sides of the membership in sync, as the seed script does.
+      const previousTeams = await User.find({ _id: { $in: uniqueMemberIds }, team: { $ne: null } }).select('team').lean();
+      const previousTeamIds = [...new Set(previousTeams.map((user) => String(user.team)))].filter((id) => id !== String(team._id));
+      if (previousTeamIds.length > 0) {
+        await Team.updateMany({ _id: { $in: previousTeamIds } }, { $pull: { members: { $in: uniqueMemberIds } } });
+      }
+      await User.updateMany({ _id: { $in: uniqueMemberIds } }, { $set: { team: team._id } });
+    }
+    return team.toObject();
+  } catch (error) {
+    if ((error as { code?: number }).code === 11000) throw httpError(409, 'A team with that name already exists');
+    throw error;
+  }
 }
 
 export async function getLeaderboard() {
-  const totals = await Activity.aggregate<{ teamName: string; totalPoints: number }>([
-    { $group: { _id: '$team', totalPoints: { $sum: '$points' } } },
-    {
-      $lookup: {
-        from: Team.collection.name,
-        localField: '_id',
-        foreignField: '_id',
-        as: 'team',
-      },
-    },
-    { $unwind: '$team' },
-    { $sort: { totalPoints: -1, 'team.name': 1 } },
-    { $project: { _id: 0, teamName: '$team.name', totalPoints: 1 } },
+  const [totals, teams] = await Promise.all([
+    Activity.aggregate<{ _id: unknown; totalPoints: number }>([{ $group: { _id: '$team', totalPoints: { $sum: '$points' } } }]),
+    Team.find().lean(),
   ]);
+  const totalsByTeam = new Map(totals.map((row) => [String(row._id), row.totalPoints]));
+  const sorted = teams
+    .map((team) => ({ teamName: team.name, totalPoints: totalsByTeam.get(String(team._id)) ?? 0 }))
+    .sort((a, b) => b.totalPoints - a.totalPoints || a.teamName.localeCompare(b.teamName));
 
-  return totals.map((entry, index) => ({ ...entry, rank: index + 1 }));
-}
-
-function focusForActivity(type: string) {
-  const normalizedType = type.toLowerCase();
-  if (['run', 'running', 'cycle', 'cycling', 'walk', 'walking'].includes(normalizedType)) return 'endurance';
-  return normalizedType;
+  // Competition ranking: tied teams share a rank and the next rank skips ahead (1, 1, 3).
+  let rank = 0;
+  let previousTotal: number | undefined;
+  return sorted.map((entry, index) => {
+    if (entry.totalPoints !== previousTotal) {
+      rank = index + 1;
+      previousTotal = entry.totalPoints;
+    }
+    return { ...entry, rank };
+  });
 }
 
 export async function suggestWorkouts(userEmail: string) {
   const user = await User.findOne({ email: userEmail.trim().toLowerCase() }).lean();
-  if (!user) throw httpError(404, 'User not found');
+  if (!user) throw httpError(404, 'No user found for that email');
 
-  const recentActivities = await Activity.find({ user: user._id }).sort({ occurredAt: -1 }).limit(10).lean();
+  const recent = await Activity.findOne({ user: user._id }).sort({ occurredAt: -1 }).lean();
+  const recentFocus = recent ? focusByActivityType[recent.type] : undefined;
   const workouts = await Workout.find().lean();
-  const goal = user.fitnessGoal.trim().toLowerCase();
-  const activityFocuses = recentActivities.map((activity) => ({
-    focus: focusForActivity(activity.type),
-    type: activity.type,
-  }));
-  const rankedFocuses = [goal, ...activityFocuses.map(({ focus }) => focus)]
-    .filter((focus, index, focuses) => focus && focuses.indexOf(focus) === index);
 
-  return workouts
+  const ranked = workouts
     .map((workout) => {
-      const focus = workout.focus.trim().toLowerCase();
-      const focusIndex = rankedFocuses.indexOf(focus);
-      if (focusIndex === -1) return null;
-      const reason = focusIndex === 0
-        ? `Recommended to support your ${user.fitnessGoal} goal.`
-        : `Recommended based on your recent ${activityFocuses.find((activity) => activity.focus === focus)?.type ?? focus} activity.`;
-      return { ...workout, reason, focusIndex };
+      if (workout.focus === user.fitnessGoal) {
+        const activityNote = recent && recentFocus === workout.focus ? ` and your recent ${recent.type} activity` : '';
+        return { workout, priority: 0, reason: `Matches your ${user.fitnessGoal} goal${activityNote}` };
+      }
+      if (recent && workout.focus === recentFocus) {
+        return { workout, priority: 1, reason: `Matches your recent ${recent.type} activity` };
+      }
+      return null;
     })
-    .filter((workout): workout is NonNullable<typeof workout> => workout !== null)
-    .sort((left, right) => left.focusIndex - right.focusIndex)
-    .map(({ focusIndex: _focusIndex, ...workout }) => workout);
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    .sort((a, b) => a.priority - b.priority || a.workout.title.localeCompare(b.workout.title));
+
+  const suggestions = ranked.length > 0
+    ? ranked
+    : workouts.map((workout) => ({ workout, priority: 2, reason: 'A general option to round out your routine' }));
+
+  return suggestions.map(({ workout, reason }) => ({
+    title: workout.title,
+    focus: workout.focus,
+    minutes: workout.minutes,
+    difficulty: workout.difficulty,
+    reason,
+  }));
 }
 
 export { User };

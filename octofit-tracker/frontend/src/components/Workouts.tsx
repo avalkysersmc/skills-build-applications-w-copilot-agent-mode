@@ -1,31 +1,34 @@
+import { useApiResource } from '../api/useApiResource.js';
+import type { WorkoutSuggestion } from '../api/types.js';
 import { CapabilityCard } from './CapabilityCard.js';
-import { useApiData } from '../api/useApiData.js';
 
-type Workout = { title: string; focus: string; minutes: number; difficulty: string; reason: string };
-type WorkoutsResponse = { suggestions: Workout[] };
+type SuggestionsResponse = { suggestions: WorkoutSuggestion[] };
+
+// Until user selection exists, suggestions are shown for a demo user.
+const demoUserEmail = (import.meta.env.VITE_DEMO_USER_EMAIL as string | undefined) ?? 'mona@example.com';
 
 export default function Workouts() {
-  const userEmail = 'mona@example.com';
-  const path = `/api/workouts/suggestions/${encodeURIComponent(userEmail)}`;
-  const { data, loading, error } = useApiData<WorkoutsResponse>(path);
-  const suggestions = data?.suggestions ?? [];
-
+  const resource = useApiResource<SuggestionsResponse>(`/api/workouts/suggestions/${encodeURIComponent(demoUserEmail)}`);
   return (
     <CapabilityCard
       title="Workout suggestions"
       description="Recommend workouts from activity patterns."
-      loading={loading}
-      error={error}
-      empty={!loading && !error && suggestions.length === 0}
-      emptyMessage="No workout suggestions available."
+      resource={resource}
+      loadingText="Loading workout suggestions…"
+      errorText="Unable to load workout suggestions. Please try again."
+      emptyText="No workout suggestions yet."
+      isEmpty={(data) => data.suggestions.length === 0}
     >
-      <ul>
-        {suggestions.map((workout) => (
-          <li key={workout.title}>
-            <strong>{workout.title}</strong> — {workout.focus}, {workout.minutes} minutes ({workout.difficulty}). {workout.reason}
-          </li>
-        ))}
-      </ul>
+      {(data) => (
+        <ul className="list-unstyled mb-0">
+          {data.suggestions.map((suggestion) => (
+            <li key={suggestion.title} className="mb-2">
+              <strong>{suggestion.title}</strong>
+              <p className="mb-0">{suggestion.reason}</p>
+            </li>
+          ))}
+        </ul>
+      )}
     </CapabilityCard>
   );
 }

@@ -1,29 +1,30 @@
+import { useApiResource } from '../api/useApiResource.js';
+import type { Team } from '../api/types.js';
 import { CapabilityCard } from './CapabilityCard.js';
-import { useApiData } from '../api/useApiData.js';
 
-type Team = { name: string; mascot?: string; members: string[] };
 type TeamsResponse = { teams: Team[] };
 
 export default function Teams() {
-  const { data, loading, error } = useApiData<TeamsResponse>('/api/teams');
-  const teams = data?.teams ?? [];
-
+  const resource = useApiResource<TeamsResponse>('/api/teams');
   return (
     <CapabilityCard
       title="Teams"
       description="Manage teams and members."
-      loading={loading}
-      error={error}
-      empty={!loading && !error && teams.length === 0}
-      emptyMessage="No teams yet."
+      resource={resource}
+      loadingText="Loading teams…"
+      errorText="Unable to load teams. Please try again."
+      emptyText="No teams yet."
+      isEmpty={(data) => data.teams.length === 0}
     >
-      <ul>
-        {teams.map((team) => (
-          <li key={team.name}>
-            {team.name}{team.mascot ? ` (${team.mascot})` : ''} — {team.members.length} members
-          </li>
-        ))}
-      </ul>
+      {(data) => (
+        <ul className="list-unstyled mb-0">
+          {data.teams.map((team, index) => (
+            <li key={team._id ?? index} className="mb-2">
+              <strong>{team.name}</strong> · Mascot: {team.mascot} · {team.members.length} {team.members.length === 1 ? 'member' : 'members'}
+            </li>
+          ))}
+        </ul>
+      )}
     </CapabilityCard>
   );
 }
