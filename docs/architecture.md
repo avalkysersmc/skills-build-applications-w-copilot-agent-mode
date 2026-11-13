@@ -39,8 +39,8 @@ OctoFit Tracker is a three-tier application for a school fitness program. The st
 
 ## Test plan
 
-- Run the data contract tests after model or seed changes. A failure indicates a missing model constraint, relationship, or seed-data behavior. `npm run test:data --prefix octofit-tracker/backend` — **currently fails 4 of 5 tests**: required-field validation is missing for users, teams, activities, and workouts; the seed idempotency test passes.
-- Run the API contract tests after route or service changes. Failures indicate a mismatch in HTTP status codes, response shape, persistence, points/ranking, or suggestion matching. `npm run test:api --prefix octofit-tracker/backend` — **currently fails all 4 tests**: activity handling, team creation (missing-name request returns 501 rather than 400), leaderboard output (empty rather than ranked totals), and workout suggestions (missing `reason`).
-- Run the frontend contract tests after page or API-client changes. Failures indicate a missing API request, rendered content, or accessible loading/error/empty state. `npm test --prefix octofit-tracker/frontend` — **currently fails all 15 tests**; pages still render the “Implementation pending” stub instead of the expected API-driven behavior.
+- Run the data contract tests after model or seed changes. A failure indicates a missing model constraint, relationship, or seed-data behavior. `npm run test:data --prefix octofit-tracker/backend` — **passes: 5 tests**.
+- Run the API contract tests after route or service changes. Failures indicate a mismatch in HTTP status codes, response shape, persistence, points/ranking, or suggestion matching. `npm run test:api --prefix octofit-tracker/backend` — **passes: 4 tests**.
+- Run the frontend contract tests after page or API-client changes. Failures indicate a missing API request, rendered content, or accessible loading/error/empty state. `npm test --prefix octofit-tracker/frontend` — **passes: 15 tests**.
 - Run the backend build to catch TypeScript or backend compilation errors. `npm run build --prefix octofit-tracker/backend` — **passes**.
 - Run the frontend build to catch frontend compilation or bundling errors. `npm run build --prefix octofit-tracker/frontend` — **passes**.
