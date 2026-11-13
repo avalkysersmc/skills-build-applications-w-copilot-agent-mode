@@ -28,13 +28,13 @@ OctoFit Tracker is a three-tier application for a school fitness program. The st
 
 ## Implementation decisions
 
-- **Presentation tier**: Keep React components responsible for rendering and interaction, and use the shared API client for relative `/api` requests. Each capability page should expose accessible loading, error, and empty states before rendering returned data.
-- **Logic tier**: Keep HTTP handling and contract validation in the Express routes/services. Return deliberate 4xx responses for invalid or unknown input rather than leaking Mongoose cast or validation errors as 500s.
-- **Data tier**: Use Mongoose models for required fields and relationships, and keep representative, repeatable seed data in `src/scripts/seed.ts`. Persist application data in MongoDB; do not introduce a separate storage layer.
-- **Activity tracking**: Validate that `userId` and `teamId` are well-formed IDs for existing records before creating an activity. Malformed IDs return `400`; well-formed IDs for missing users or teams return `404`. The user must belong to the submitted team, or the request returns `400`. Points equal minutes (one point per minute). `occurredAt` is optional and defaults to server time.
-- **Team management**: Require a name and mascot (`400` otherwise), preserve both, and accept a members array of existing user IDs (unknown or malformed IDs return `400`). Team names are unique (duplicates return `409`). Membership is kept in sync on both the team and the user.
-- **Leaderboard**: Include every team, including teams with zero points. Sort totals descending and use competition ranking, so tied teams share a rank and the next rank skips ahead (`1, 1, 3`).
-- **Workout suggestions**: Match the requested email to a user (case-insensitive). The user's `fitnessGoal` takes priority, then the focus of their most recent activity. Each entry has a `reason`. If nothing matches, return all workouts with a general reason. Unknown emails return `404`.
+- Presentation tier decision: Keep React components responsible for rendering and interaction, and use the shared API client for relative `/api` requests. Each capability page should expose accessible loading, error, and empty states before rendering returned data.
+- Logic tier decision: Keep HTTP handling and contract validation in the Express routes/services. Return deliberate 4xx responses for invalid or unknown input rather than leaking Mongoose cast or validation errors as 500s.
+- Data tier decision: Use Mongoose models for required fields and relationships, and keep representative, repeatable seed data in `src/scripts/seed.ts`. Persist application data in MongoDB; do not introduce a separate storage layer.
+- Activity tracking approach: Validate that `userId` and `teamId` are well-formed IDs for existing records before creating an activity. Malformed IDs return `400`; well-formed IDs for missing users or teams return `404`. The user must belong to the submitted team, or the request returns `400`. Points equal minutes (one point per minute). `occurredAt` is optional and defaults to server time.
+- Team management approach: Require a name and mascot (`400` otherwise), preserve both, and accept a members array of existing user IDs (unknown or malformed IDs return `400`). Team names are unique (duplicates return `409`). Membership is kept in sync on both the team and the user.
+- Leaderboard approach: Include every team, including teams with zero points. Sort totals descending and use competition ranking, so tied teams share a rank and the next rank skips ahead (`1, 1, 3`).
+- Workout suggestions approach: Match the requested email to a user (case-insensitive). The user's `fitnessGoal` takes priority, then the focus of their most recent activity. Each entry has a `reason`. If nothing matches, return all workouts with a general reason. Unknown emails return `404`.
 - **Error responses**: All errors use the shape `{ "error": "<message>" }`.
 - **Implementation order**: Establish model validation first, then implement and test API writes and reads, then connect the presentation pages to the API. Keep authentication out of scope.
 

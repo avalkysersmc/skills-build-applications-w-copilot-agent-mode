@@ -1,3 +1,4 @@
+import { getJson } from '../api/client.js';
 import { useApiResource } from '../api/useApiResource.js';
 import type { Team } from '../api/types.js';
 import { CapabilityCard } from './CapabilityCard.js';
@@ -5,7 +6,7 @@ import { CapabilityCard } from './CapabilityCard.js';
 type TeamsResponse = { teams: Team[] };
 
 export default function Teams() {
-  const resource = useApiResource<TeamsResponse>('/api/teams');
+  const resource = useApiResource(() => getJson<TeamsResponse>('/api/teams'), '/api/teams');
   return (
     <CapabilityCard
       title="Teams"

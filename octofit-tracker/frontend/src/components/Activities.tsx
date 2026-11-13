@@ -1,3 +1,4 @@
+import { getJson } from '../api/client.js';
 import { useApiResource } from '../api/useApiResource.js';
 import type { Activity } from '../api/types.js';
 import { CapabilityCard } from './CapabilityCard.js';
@@ -5,7 +6,7 @@ import { CapabilityCard } from './CapabilityCard.js';
 type ActivitiesResponse = { activities: Activity[] };
 
 export default function Activities() {
-  const resource = useApiResource<ActivitiesResponse>('/api/activities');
+  const resource = useApiResource(() => getJson<ActivitiesResponse>('/api/activities'), '/api/activities');
   return (
     <CapabilityCard
       title="Activities"

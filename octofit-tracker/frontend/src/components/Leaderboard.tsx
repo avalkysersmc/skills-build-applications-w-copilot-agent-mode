@@ -1,3 +1,4 @@
+import { getJson } from '../api/client.js';
 import { useApiResource } from '../api/useApiResource.js';
 import type { LeaderboardEntry } from '../api/types.js';
 import { CapabilityCard } from './CapabilityCard.js';
@@ -5,7 +6,7 @@ import { CapabilityCard } from './CapabilityCard.js';
 type LeaderboardResponse = { leaderboard: LeaderboardEntry[] };
 
 export default function Leaderboard() {
-  const resource = useApiResource<LeaderboardResponse>('/api/leaderboard');
+  const resource = useApiResource(() => getJson<LeaderboardResponse>('/api/leaderboard'), '/api/leaderboard');
   return (
     <CapabilityCard
       title="Leaderboard"

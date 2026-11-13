@@ -1,3 +1,4 @@
+import { getJson } from '../api/client.js';
 import { useApiResource } from '../api/useApiResource.js';
 import type { WorkoutSuggestion } from '../api/types.js';
 import { CapabilityCard } from './CapabilityCard.js';
@@ -6,9 +7,10 @@ type SuggestionsResponse = { suggestions: WorkoutSuggestion[] };
 
 // Until user selection exists, suggestions are shown for a demo user.
 const demoUserEmail = (import.meta.env.VITE_DEMO_USER_EMAIL as string | undefined) ?? 'mona@example.com';
+const suggestionsPath = `/api/workouts/suggestions/${encodeURIComponent(demoUserEmail)}`;
 
 export default function Workouts() {
-  const resource = useApiResource<SuggestionsResponse>(`/api/workouts/suggestions/${encodeURIComponent(demoUserEmail)}`);
+  const resource = useApiResource(() => getJson<SuggestionsResponse>(suggestionsPath), suggestionsPath);
   return (
     <CapabilityCard
       title="Workout suggestions"
