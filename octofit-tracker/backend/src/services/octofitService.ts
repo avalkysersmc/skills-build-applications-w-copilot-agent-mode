@@ -42,6 +42,9 @@ export async function createActivity(input: any) {
   }
   let occurred = new Date();
   if (occurredAt !== undefined) {
+    if (typeof occurredAt !== 'string' && typeof occurredAt !== 'number') {
+      throw httpError(400, 'occurredAt must be a valid date');
+    }
     occurred = new Date(occurredAt);
     if (Number.isNaN(occurred.getTime())) throw httpError(400, 'occurredAt must be a valid date');
   }
@@ -70,7 +73,7 @@ export async function listTeams() {
 export async function createTeam(input: any) {
   const name = requireText(input?.name, 'name');
   const mascot = requireText(input?.mascot, 'mascot');
-  const memberIds: unknown[] = input?.members ?? [];
+  const memberIds: unknown[] = input?.members === undefined ? [] : input.members;
   if (!Array.isArray(memberIds) || !memberIds.every(isObjectId)) {
     throw httpError(400, 'members must be a list of valid IDs');
   }
@@ -121,7 +124,8 @@ export async function getLeaderboard() {
 }
 
 export async function suggestWorkouts(userEmail: string) {
-  const user = await User.findOne({ email: userEmail.trim().toLowerCase() }).lean();
+  const email = requireText(userEmail, 'userEmail').toLowerCase();
+  const user = await User.findOne({ email }).lean();
   if (!user) throw httpError(404, 'No user found for that email');
 
   const recent = await Activity.findOne({ user: user._id }).sort({ occurredAt: -1 }).lean();
